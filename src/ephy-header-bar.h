@@ -43,4 +43,6 @@ EphyActionBarEnd   *ephy_header_bar_get_action_bar_end             (EphyHeaderBa
 void                ephy_header_bar_set_adaptive_mode              (EphyHeaderBar    *header_bar,
                                                                     EphyAdaptiveMode  adaptive_mode);
 
+GtkBox             *ephy_header_bar_get_title_row                  (EphyHeaderBar *header_bar);
+
 G_END_DECLS

@@ -51,6 +51,7 @@ struct _EphyHeaderBar {
   AdwBin parent_instance;
 
   GtkWidget *header_bar;
+  GtkBox *title_row;
   EphyWindow *window;
   EphyTitleWidget *title_widget;
   EphyActionBarStart *action_bar_start;
@@ -182,7 +183,10 @@ ephy_header_bar_constructed (GObject *object)
     gtk_widget_set_margin_start (GTK_WIDGET (header_bar->title_widget), 6);
     gtk_widget_set_margin_end (GTK_WIDGET (header_bar->title_widget), 6);
 
-    adw_bin_set_child (ADW_BIN (event_box), GTK_WIDGET (header_bar->title_widget));
+    header_bar->title_row = GTK_BOX (gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0));
+    gtk_widget_set_hexpand (GTK_WIDGET (header_bar->title_row), TRUE);
+    gtk_box_append (header_bar->title_row, GTK_WIDGET (header_bar->title_widget));
+    adw_bin_set_child (ADW_BIN (event_box), GTK_WIDGET (header_bar->title_row));
   } else {
     GtkWidget *clamp;
 
@@ -327,4 +331,10 @@ ephy_header_bar_set_adaptive_mode (EphyHeaderBar    *header_bar,
 
   if (ephy_embed_shell_get_mode (ephy_embed_shell_get_default ()) != EPHY_EMBED_SHELL_MODE_APPLICATION)
     ephy_location_entry_set_adaptive_mode (EPHY_LOCATION_ENTRY (header_bar->title_widget), adaptive_mode);
+}
+
+GtkBox *
+ephy_header_bar_get_title_row (EphyHeaderBar *header_bar)
+{
+  return header_bar->title_row;
 }

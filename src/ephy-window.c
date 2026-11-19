@@ -58,6 +58,7 @@
 #include "ephy-mouse-gesture-controller.h"
 #include "ephy-permissions-manager.h"
 #include "ephy-prefs.h"
+#include "ephy-primetab-panel.h"
 #include "ephy-reader-handler.h"
 #include "ephy-security-dialog.h"
 #include "ephy-session.h"
@@ -159,6 +160,9 @@ struct _EphyWindow {
   GHashTable *action_labels;
   EphyTabView *tab_view;
   AdwTabBar *tab_bar;
+  AdwBin *tab_bar_home;
+  guint panel_timer;
+  gboolean tabs_in_header;
   GtkWidget *action_bar_revealer;
   GtkWidget *action_bar;
   GtkWidget *overlay_split_view;
@@ -3828,6 +3832,56 @@ is_browser_default (void)
   return FALSE;
 }
 
+static gboolean
+update_primetab_panel (EphyWindow *window)
+{
+  EphyHeaderBar *header = EPHY_HEADER_BAR (window->header_bar);
+  GtkBox *row = ephy_header_bar_get_title_row (header);
+  GtkWidget *tabs = GTK_WIDGET (window->tab_bar);
+  int left = 0;
+  int right = 0;
+  int height = 0;
+  gboolean show_in_panel;
+
+  if (gtk_window_is_maximized (GTK_WINDOW (window)) &&
+      !gtk_window_is_fullscreen (GTK_WINDOW (window)) &&
+      !adw_tab_overview_get_open (window->overview) &&
+      gtk_widget_get_mapped (window->header_bar) &&
+      window->adaptive_mode == EPHY_ADAPTIVE_MODE_NORMAL &&
+      (window->chrome & EPHY_WINDOW_CHROME_TABSBAR)) {
+    height = gtk_widget_get_height (window->header_bar);
+  }
+  show_in_panel = ephy_primetab_panel_get_slot (GTK_WIDGET (window), height, &left, &right);
+
+  if (show_in_panel != window->tabs_in_header) {
+    g_object_ref (tabs);
+    if (show_in_panel) {
+      adw_bin_set_child (window->tab_bar_home, NULL);
+      gtk_box_prepend (row, tabs);
+    } else {
+      gtk_box_remove (row, tabs);
+      gtk_widget_set_size_request (tabs, -1, -1);
+      adw_bin_set_child (window->tab_bar_home, tabs);
+    }
+    g_object_unref (tabs);
+    window->tabs_in_header = show_in_panel;
+  }
+
+  if (show_in_panel) {
+    int page_count = adw_tab_view_get_n_pages (ephy_tab_view_get_tab_view (window->tab_view));
+    int available = gtk_widget_get_width (GTK_WIDGET (row)) - 180;
+
+    /* Additional tabs take room from the expanding address entry. The native
+     * tab bar scrolls once the remaining room reaches the address minimum. */
+    int tab_width = MIN (44 + 130 * page_count, MAX (44, available));
+    gtk_widget_set_size_request (tabs, tab_width, -1);
+  }
+
+  gtk_widget_set_margin_start (window->header_bar, left);
+  gtk_widget_set_margin_end (window->header_bar, right);
+  return G_SOURCE_CONTINUE;
+}
+
 static void
 ephy_window_dispose (GObject *object)
 {
@@ -3848,6 +3902,7 @@ ephy_window_dispose (GObject *object)
     g_clear_object (&window->mouse_gesture_controller);
     g_clear_object (&window->search_engine_model);
 
+    g_clear_handle_id (&window->panel_timer, g_source_remove);
     g_clear_handle_id (&window->modified_forms_timeout_id, g_source_remove);
 
     g_clear_weak_pointer (&window->previous_embed);
@@ -4582,7 +4637,9 @@ ephy_window_constructed (GObject *object)
   window->header_bin_bottom = adw_bin_new ();
   ephy_fullscreen_box_add_bottom_bar (window->fullscreen_box, GTK_WIDGET (window->header_bin_bottom));
 
-  ephy_fullscreen_box_add_top_bar (window->fullscreen_box, GTK_WIDGET (window->tab_bar));
+  window->tab_bar_home = ADW_BIN (adw_bin_new ());
+  adw_bin_set_child (window->tab_bar_home, GTK_WIDGET (window->tab_bar));
+  ephy_fullscreen_box_add_top_bar (window->fullscreen_box, GTK_WIDGET (window->tab_bar_home));
   ephy_fullscreen_box_add_bottom_bar (window->fullscreen_box, window->action_bar_revealer);
 
   adw_tab_overview_set_child (ADW_TAB_OVERVIEW (window->overview),
@@ -4607,6 +4664,13 @@ ephy_window_constructed (GObject *object)
 
   ephy_tab_view_set_tab_bar (window->tab_view, window->tab_bar);
   ephy_tab_view_set_tab_overview (window->tab_view, ADW_TAB_OVERVIEW (window->overview));
+
+  if ((mode == EPHY_EMBED_SHELL_MODE_BROWSER || mode == EPHY_EMBED_SHELL_MODE_INCOGNITO) &&
+      ephy_header_bar_get_title_row (EPHY_HEADER_BAR (window->header_bar)) &&
+      gtk_widget_get_direction (GTK_WIDGET (window)) == GTK_TEXT_DIR_LTR &&
+      g_strcmp0 (g_getenv ("PRIMETAB_PANEL_BROWSER"), "1") == 0) {
+    window->panel_timer = g_timeout_add (150, (GSourceFunc)update_primetab_panel, window);
+  }
 
   /* other notifiers */
   action = g_action_map_lookup_action (G_ACTION_MAP (shell),

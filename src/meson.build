@@ -34,6 +34,7 @@ libephymain_sources = [
   'ephy-firefox-sync-dialog.c',
   'ephy-fullscreen-box.c',
   'ephy-header-bar.c',
+  'ephy-primetab-panel.c',
   'ephy-history-dialog.c',
   'ephy-history-dialog-row.c',
   'ephy-link.c',
@@ -136,6 +137,10 @@ libephymain_deps = [
   portal_dep,
   webkitgtk_dep,
 ]
+
+if gtk_x11_dep.found() and x11_dep.found()
+  libephymain_deps += [gtk_x11_dep, x11_dep]
+endif
 
 libephymain_includes = include_directories(
   '.',
