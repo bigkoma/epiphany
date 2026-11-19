@@ -3845,7 +3845,7 @@ update_primetab_panel (EphyWindow *window)
 
   if (gtk_window_is_maximized (GTK_WINDOW (window)) &&
       !gtk_window_is_fullscreen (GTK_WINDOW (window)) &&
-      !adw_tab_overview_get_open (window->overview) &&
+      !adw_tab_overview_get_open (ADW_TAB_OVERVIEW (window->overview)) &&
       gtk_widget_get_mapped (window->header_bar) &&
       window->adaptive_mode == EPHY_ADAPTIVE_MODE_NORMAL &&
       (window->chrome & EPHY_WINDOW_CHROME_TABSBAR)) {
