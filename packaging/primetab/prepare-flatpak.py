@@ -22,6 +22,13 @@ def main():
         "skip": [".git", "build"]
     }
     epiphany["config-opts"].append("-Dunit_tests=disabled")
+    customizations = next(
+        module for module in manifest["modules"] if module["name"] == "customizations"
+    )
+    customizations["sources"][0]["skip"] = [
+        ".git", ".flatpak-builder", "build-primetab", "repo",
+        "primetab.json", "primetab-build.log",
+    ]
     manifest["finish-args"].append("--env=PRIMETAB_PANEL_BROWSER=1")
     print(json.dumps(manifest, indent=4))
 
