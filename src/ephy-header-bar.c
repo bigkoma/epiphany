@@ -183,10 +183,14 @@ ephy_header_bar_constructed (GObject *object)
     gtk_widget_set_margin_start (GTK_WIDGET (header_bar->title_widget), 6);
     gtk_widget_set_margin_end (GTK_WIDGET (header_bar->title_widget), 6);
 
-    header_bar->title_row = GTK_BOX (gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0));
-    gtk_widget_set_hexpand (GTK_WIDGET (header_bar->title_row), TRUE);
-    gtk_box_append (header_bar->title_row, GTK_WIDGET (header_bar->title_widget));
-    adw_bin_set_child (ADW_BIN (event_box), GTK_WIDGET (header_bar->title_row));
+    if (g_strcmp0 (g_getenv ("PRIMETAB_PANEL_BROWSER"), "1") == 0) {
+      header_bar->title_row = GTK_BOX (gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0));
+      gtk_widget_set_hexpand (GTK_WIDGET (header_bar->title_row), TRUE);
+      gtk_box_append (header_bar->title_row, GTK_WIDGET (header_bar->title_widget));
+      adw_bin_set_child (ADW_BIN (event_box), GTK_WIDGET (header_bar->title_row));
+    } else {
+      adw_bin_set_child (ADW_BIN (event_box), GTK_WIDGET (header_bar->title_widget));
+    }
   } else {
     GtkWidget *clamp;
 

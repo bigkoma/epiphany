@@ -3857,10 +3857,12 @@ update_primetab_panel (EphyWindow *window)
     g_object_ref (tabs);
     if (show_in_panel) {
       adw_bin_set_child (window->tab_bar_home, NULL);
+      gtk_widget_set_hexpand (tabs, FALSE);
       gtk_box_prepend (row, tabs);
     } else {
       gtk_box_remove (row, tabs);
       gtk_widget_set_size_request (tabs, -1, -1);
+      gtk_widget_set_hexpand_set (tabs, FALSE);
       adw_bin_set_child (window->tab_bar_home, tabs);
     }
     g_object_unref (tabs);
@@ -4637,9 +4639,15 @@ ephy_window_constructed (GObject *object)
   window->header_bin_bottom = adw_bin_new ();
   ephy_fullscreen_box_add_bottom_bar (window->fullscreen_box, GTK_WIDGET (window->header_bin_bottom));
 
-  window->tab_bar_home = ADW_BIN (adw_bin_new ());
-  adw_bin_set_child (window->tab_bar_home, GTK_WIDGET (window->tab_bar));
-  ephy_fullscreen_box_add_top_bar (window->fullscreen_box, GTK_WIDGET (window->tab_bar_home));
+  if ((mode == EPHY_EMBED_SHELL_MODE_BROWSER || mode == EPHY_EMBED_SHELL_MODE_INCOGNITO) &&
+      ephy_header_bar_get_title_row (EPHY_HEADER_BAR (window->header_bar)) &&
+      gtk_widget_get_direction (GTK_WIDGET (window)) == GTK_TEXT_DIR_LTR) {
+    window->tab_bar_home = ADW_BIN (adw_bin_new ());
+    adw_bin_set_child (window->tab_bar_home, GTK_WIDGET (window->tab_bar));
+    ephy_fullscreen_box_add_top_bar (window->fullscreen_box, GTK_WIDGET (window->tab_bar_home));
+  } else {
+    ephy_fullscreen_box_add_top_bar (window->fullscreen_box, GTK_WIDGET (window->tab_bar));
+  }
   ephy_fullscreen_box_add_bottom_bar (window->fullscreen_box, window->action_bar_revealer);
 
   adw_tab_overview_set_child (ADW_TAB_OVERVIEW (window->overview),
@@ -4665,12 +4673,8 @@ ephy_window_constructed (GObject *object)
   ephy_tab_view_set_tab_bar (window->tab_view, window->tab_bar);
   ephy_tab_view_set_tab_overview (window->tab_view, ADW_TAB_OVERVIEW (window->overview));
 
-  if ((mode == EPHY_EMBED_SHELL_MODE_BROWSER || mode == EPHY_EMBED_SHELL_MODE_INCOGNITO) &&
-      ephy_header_bar_get_title_row (EPHY_HEADER_BAR (window->header_bar)) &&
-      gtk_widget_get_direction (GTK_WIDGET (window)) == GTK_TEXT_DIR_LTR &&
-      g_strcmp0 (g_getenv ("PRIMETAB_PANEL_BROWSER"), "1") == 0) {
+  if (window->tab_bar_home)
     window->panel_timer = g_timeout_add (150, (GSourceFunc)update_primetab_panel, window);
-  }
 
   /* other notifiers */
   action = g_action_map_lookup_action (G_ACTION_MAP (shell),

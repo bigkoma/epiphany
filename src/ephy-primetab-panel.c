@@ -4,6 +4,8 @@
 #include "ephy-primetab-panel.h"
 
 #if HAVE_PRIMETAB_X11
+#include <string.h>
+
 #include <gdk/x11/gdkx.h>
 #include <X11/Xatom.h>
 
@@ -49,7 +51,7 @@ ephy_primetab_panel_get_slot (GtkWidget *window,
   Window xid;
   Window dock = None;
   Atom height_atom;
-  unsigned long height;
+  unsigned long height, previous_height;
   unsigned long slot[3];
   int scale;
 
@@ -62,14 +64,20 @@ ephy_primetab_panel_get_slot (GtkWidget *window,
   scale = gtk_widget_get_scale_factor (window);
   height_atom = XInternAtom (display, "_PRIMETAB_BROWSER_BAR_V1", False);
 
-  if (header_height > 0) {
-    height = header_height * scale;
-    XChangeProperty (display, xid, height_atom, XA_CARDINAL, 32, PropModeReplace,
-                     (const unsigned char *)&height, 1);
-  } else {
-    XDeleteProperty (display, xid, height_atom);
-    return FALSE;
+  height = header_height * scale;
+  previous_height = GPOINTER_TO_UINT (g_object_get_data (G_OBJECT (surface), "primetab-bar-height"));
+  if (height != previous_height) {
+    if (height) {
+      XChangeProperty (display, xid, height_atom, XA_CARDINAL, 32, PropModeReplace,
+                       (const unsigned char *)&height, 1);
+    } else {
+      XDeleteProperty (display, xid, height_atom);
+    }
+    g_object_set_data (G_OBJECT (surface), "primetab-bar-height", GUINT_TO_POINTER (height));
   }
+
+  if (!height)
+    return FALSE;
 
   if (!read_values (gdk_display, DefaultRootWindow (display),
                     XInternAtom (display, "_PRIMETAB_WINGPANEL_V1", False), XA_WINDOW, &dock, 1) ||
