@@ -119,3 +119,45 @@ popover.suggestions listview > row:selected {
   background: rgba(0, 0, 0, 0.65);
   color: white;
 }
+
+/* Keep the native toolbar and tabs within the height of Wingpanel. */
+.primetab-panel-bar headerbar,
+.primetab-panel-bar headerbar > windowhandle,
+.primetab-panel-bar headerbar > windowhandle > box,
+.primetab-panel-bar .location-entry,
+.primetab-panel-bar .location-entry entry,
+.primetab-panel-bar .location-entry text,
+.primetab-panel-bar tabbar,
+.primetab-panel-bar tabbar tabbox,
+.primetab-panel-bar tabbar tab,
+.primetab-panel-bar tabbar tab > box {
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.primetab-panel-bar headerbar .toolbar-button,
+.primetab-panel-bar headerbar .toolbar-button > button,
+.primetab-panel-bar windowcontrols button,
+.primetab-panel-bar .location-entry button,
+.primetab-panel-bar tabbar button,
+.primetab-panel-bar headerbar > windowhandle > box > box > button,
+.primetab-panel-bar headerbar > windowhandle > box > box > menubutton > button {
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.primetab-panel-bar .toolbar-button > image,
+.primetab-panel-bar .toolbar-button > button > box > image,
+.primetab-panel-bar .location-entry button > image,
+.primetab-panel-bar tabbar image,
+.primetab-panel-bar windowcontrols image {
+  -gtk-icon-size: 16px;
+  padding-top: 0;
+  padding-bottom: 0;
+}

@@ -3843,15 +3843,12 @@ update_primetab_panel (EphyWindow *window)
   int height = 0;
   gboolean show_in_panel;
 
-  if (gtk_window_is_maximized (GTK_WINDOW (window)) &&
-      !gtk_window_is_fullscreen (GTK_WINDOW (window)) &&
-      !adw_tab_overview_get_open (ADW_TAB_OVERVIEW (window->overview)) &&
-      gtk_widget_get_mapped (window->header_bar) &&
-      window->adaptive_mode == EPHY_ADAPTIVE_MODE_NORMAL &&
-      (window->chrome & EPHY_WINDOW_CHROME_TABSBAR)) {
-    height = gtk_widget_get_height (window->header_bar);
-  }
-  show_in_panel = ephy_primetab_panel_get_slot (GTK_WIDGET (window), height, &left, &right);
+  show_in_panel = gtk_window_is_maximized (GTK_WINDOW (window)) &&
+                  !gtk_window_is_fullscreen (GTK_WINDOW (window)) &&
+                  gtk_widget_get_mapped (GTK_WIDGET (window)) &&
+                  window->adaptive_mode == EPHY_ADAPTIVE_MODE_NORMAL &&
+                  (window->chrome & EPHY_WINDOW_CHROME_TABSBAR) &&
+                  ephy_primetab_panel_get_slot (GTK_WIDGET (window), &left, &right, &height);
 
   if (show_in_panel != window->tabs_in_header) {
     g_object_ref (tabs);
@@ -3859,11 +3856,13 @@ update_primetab_panel (EphyWindow *window)
       adw_bin_set_child (window->tab_bar_home, NULL);
       gtk_widget_set_hexpand (tabs, FALSE);
       gtk_box_prepend (row, tabs);
+      gtk_widget_add_css_class (window->header_bar, "primetab-panel-bar");
     } else {
       gtk_box_remove (row, tabs);
       gtk_widget_set_size_request (tabs, -1, -1);
       gtk_widget_set_hexpand_set (tabs, FALSE);
       adw_bin_set_child (window->tab_bar_home, tabs);
+      gtk_widget_remove_css_class (window->header_bar, "primetab-panel-bar");
     }
     g_object_unref (tabs);
     window->tabs_in_header = show_in_panel;
@@ -3881,6 +3880,18 @@ update_primetab_panel (EphyWindow *window)
 
   gtk_widget_set_margin_start (window->header_bar, left);
   gtk_widget_set_margin_end (window->header_bar, right);
+  gtk_widget_set_size_request (window->header_bar, -1, show_in_panel ? height : -1);
+
+  if (show_in_panel) {
+    int minimum;
+
+    gtk_widget_measure (window->header_bar, GTK_ORIENTATION_VERTICAL, -1,
+                        &minimum, NULL, NULL, NULL);
+    if (minimum > height)
+      height = 0;
+  }
+  ephy_primetab_panel_set_height (GTK_WIDGET (window), height,
+                                 height > 0 && gtk_widget_get_height (window->header_bar) == height);
   return G_SOURCE_CONTINUE;
 }
 
