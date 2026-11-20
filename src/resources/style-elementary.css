@@ -124,9 +124,8 @@ popover.suggestions listview > row:selected {
 .primetab-panel-bar headerbar,
 .primetab-panel-bar headerbar > windowhandle,
 .primetab-panel-bar headerbar > windowhandle > box,
-.primetab-panel-bar .location-entry,
-.primetab-panel-bar .location-entry entry,
-.primetab-panel-bar .location-entry text,
+.primetab-panel-bar #title-box-container entry,
+.primetab-panel-bar #title-box-container text,
 .primetab-panel-bar tabbar,
 .primetab-panel-bar tabbar tabbox,
 .primetab-panel-bar tabbar tab,
@@ -141,7 +140,8 @@ popover.suggestions listview > row:selected {
 .primetab-panel-bar headerbar .toolbar-button,
 .primetab-panel-bar headerbar .toolbar-button > button,
 .primetab-panel-bar windowcontrols button,
-.primetab-panel-bar .location-entry button,
+.primetab-panel-bar #title-box-container .entry-icon,
+.primetab-panel-bar #title-box-container .entry-icon > button,
 .primetab-panel-bar tabbar button,
 .primetab-panel-bar headerbar > windowhandle > box > box > button,
 .primetab-panel-bar headerbar > windowhandle > box > box > menubutton > button {
@@ -154,7 +154,7 @@ popover.suggestions listview > row:selected {
 
 .primetab-panel-bar .toolbar-button > image,
 .primetab-panel-bar .toolbar-button > button > box > image,
-.primetab-panel-bar .location-entry button > image,
+.primetab-panel-bar #title-box-container .entry-icon > image,
 .primetab-panel-bar tabbar image,
 .primetab-panel-bar windowcontrols image {
   -gtk-icon-size: 16px;
