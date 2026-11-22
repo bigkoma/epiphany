@@ -376,8 +376,16 @@ ephy_window_open_link (EphyLink      *link,
       ntflags |= EPHY_NEW_TAB_JUMP;
 
     if (flags & EPHY_LINK_NEW_WINDOW ||
-        (flags & EPHY_LINK_NEW_TAB && window->is_popup))
-      target_window = ephy_window_new ();
+        (flags & EPHY_LINK_NEW_TAB && window->is_popup)) {
+      EphyWindow *single_window = ephy_shell_get_single_window (ephy_shell_get_default ());
+
+      target_window = single_window ? single_window : ephy_window_new ();
+      if (single_window) {
+        ntflags |= EPHY_NEW_TAB_JUMP;
+        if (target_window != window)
+          embed = NULL;
+      }
+    }
 
     if (flags & EPHY_LINK_NEW_TAB_APPEND_AFTER)
       ntflags |= EPHY_NEW_TAB_APPEND_AFTER;
@@ -2096,7 +2104,8 @@ create_web_view_cb (WebKitWebView          *web_view,
   EphyWindow *target_window;
 
   if ((ephy_embed_shell_get_mode (ephy_embed_shell_get_default ()) != EPHY_EMBED_SHELL_MODE_APPLICATION) &&
-      (g_settings_get_boolean (EPHY_SETTINGS_MAIN,
+      (ephy_shell_get_single_window (ephy_shell_get_default ()) == window ||
+       g_settings_get_boolean (EPHY_SETTINGS_MAIN,
                                EPHY_PREFS_NEW_WINDOWS_IN_TABS) ||
        g_settings_get_boolean (EPHY_SETTINGS_LOCKDOWN,
                                EPHY_PREFS_LOCKDOWN_FULLSCREEN))) {
@@ -2472,7 +2481,11 @@ decide_navigation_policy (WebKitWebView            *web_view,
     if (button == GDK_BUTTON_PRIMARY && state == GDK_SHIFT_MASK &&
         !g_settings_get_boolean (EPHY_SETTINGS_LOCKDOWN,
                                  EPHY_PREFS_LOCKDOWN_FULLSCREEN)) {
-      target_window = ephy_window_new ();
+      EphyWindow *single_window = ephy_shell_get_single_window (ephy_shell_get_default ());
+
+      target_window = single_window ? single_window : ephy_window_new ();
+      if (single_window)
+        flags |= EPHY_NEW_TAB_JUMP;
     }
     /* New background tab in existing window for middle click and
      * control+click */
@@ -3601,6 +3614,9 @@ tab_view_create_window_cb (AdwTabView *tab_view,
                            EphyWindow *window)
 {
   EphyWindow *new_window;
+
+  if (ephy_shell_get_single_window (ephy_shell_get_default ()))
+    return NULL;
 
   new_window = ephy_window_new ();
 

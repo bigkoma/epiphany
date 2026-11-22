@@ -94,6 +94,13 @@ window_cmd_new_window (GSimpleAction *action,
     return;
   }
 
+  new_window = ephy_shell_get_single_window (shell);
+  if (new_window) {
+    window_cmd_new_tab (action, parameter, new_window);
+    gtk_window_present (GTK_WINDOW (new_window));
+    return;
+  }
+
   new_window = ephy_window_new ();
   ephy_link_open (EPHY_LINK (new_window), NULL, NULL, EPHY_LINK_HOME_PAGE);
 }

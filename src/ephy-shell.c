@@ -134,7 +134,9 @@ ephy_shell_startup_continue (EphyShell               *shell,
 {
   EphySession *session = ephy_shell_get_session (shell);
   gboolean new_window_option = (ctx->startup_mode == EPHY_STARTUP_NEW_WINDOW);
-  GtkWindow *active_window = gtk_application_get_active_window (GTK_APPLICATION (shell));
+  EphyWindow *single_window = ephy_shell_get_single_window (shell);
+  GtkWindow *active_window = single_window ? GTK_WINDOW (single_window) :
+                             gtk_application_get_active_window (GTK_APPLICATION (shell));
   EphyEmbedShellMode mode;
 
   mode = ephy_embed_shell_get_mode (EPHY_EMBED_SHELL (shell));
@@ -1071,6 +1073,28 @@ ephy_shell_get_default (void)
   return ephy_shell;
 }
 
+static gboolean
+single_window_enabled (EphyShell *shell)
+{
+  return ephy_embed_shell_get_mode (EPHY_EMBED_SHELL (shell)) == EPHY_EMBED_SHELL_MODE_BROWSER &&
+         g_strcmp0 (g_getenv ("PRIMETAB_SINGLE_WINDOW"), "1") == 0;
+}
+
+EphyWindow *
+ephy_shell_get_single_window (EphyShell *shell)
+{
+  if (!single_window_enabled (shell))
+    return NULL;
+
+  for (GList *item = gtk_application_get_windows (GTK_APPLICATION (shell)); item; item = item->next) {
+    if (EPHY_IS_WINDOW (item->data) &&
+        !ephy_embed_container_get_is_popup (EPHY_EMBED_CONTAINER (item->data)))
+      return EPHY_WINDOW (item->data);
+  }
+
+  return NULL;
+}
+
 static void
 webkit_notification_clicked_cb (WebKitNotification *notification,
                                 gpointer            user_data)
@@ -1609,6 +1633,7 @@ open_uris_data_new (EphyShell        *shell,
 {
   OpenURIsData *data;
   gboolean fullscreen_lockdown;
+  gboolean single_window = single_window_enabled (shell);
   EphySession *session = ephy_shell_get_session (shell);
 
   data = g_new0 (OpenURIsData, 1);
@@ -1621,11 +1646,12 @@ open_uris_data_new (EphyShell        *shell,
 
   data->flags |= EPHY_NEW_TAB_JUMP;
 
-  if (startup_mode == EPHY_STARTUP_NEW_WINDOW && !fullscreen_lockdown) {
+  if (startup_mode == EPHY_STARTUP_NEW_WINDOW && !fullscreen_lockdown && !single_window) {
     data->window = ephy_window_new ();
   } else {
-    data->window = EPHY_WINDOW (gtk_application_get_active_window (GTK_APPLICATION (shell)));
-    data->reuse_empty_tab = TRUE;
+    data->window = single_window ? ephy_shell_get_single_window (shell) :
+                   EPHY_WINDOW (gtk_application_get_active_window (GTK_APPLICATION (shell)));
+    data->reuse_empty_tab = !single_window || startup_mode != EPHY_STARTUP_NEW_WINDOW;
 
     if (data->window && !fullscreen_lockdown &&
         gtk_window_is_fullscreen (GTK_WINDOW (data->window)) &&
@@ -1647,6 +1673,33 @@ open_uris_data_free (OpenURIsData *data)
   g_free (data);
 }
 
+static EphyEmbed *
+find_open_web_page (EphyWindow *window,
+                    const char *url)
+{
+  EphyTabView *tabs;
+  g_autofree char *address = NULL;
+
+  if (!url || !ephy_embed_utils_address_is_valid (url))
+    return NULL;
+
+  address = ephy_embed_utils_normalize_address (url);
+  if (!g_str_has_prefix (address, "http://") && !g_str_has_prefix (address, "https://"))
+    return NULL;
+
+  tabs = ephy_window_get_tab_view (window);
+  for (int i = 0; i < ephy_tab_view_get_n_pages (tabs); i++) {
+    EphyEmbed *embed = EPHY_EMBED (ephy_tab_view_get_nth_page (tabs, i));
+    EphyWebView *view = ephy_embed_get_web_view (embed);
+
+    if (g_strcmp0 (address, ephy_web_view_get_address (view)) == 0 ||
+        g_strcmp0 (address, webkit_web_view_get_uri (WEBKIT_WEB_VIEW (view))) == 0)
+      return embed;
+  }
+
+  return NULL;
+}
+
 static gboolean
 ephy_shell_open_uris_idle (OpenURIsData *data)
 {
@@ -1660,6 +1713,24 @@ ephy_shell_open_uris_idle (OpenURIsData *data)
   gboolean url_is_xpi;
 
   mode = ephy_embed_shell_get_mode (EPHY_EMBED_SHELL (data->shell));
+  url = data->uris ? data->uris[data->current_uri] : NULL;
+
+  if (single_window_enabled (data->shell)) {
+    EphyWindow *window = ephy_shell_get_single_window (data->shell);
+
+    if (window != data->window)
+      data->previous_embed = NULL;
+    data->window = window;
+    if (window) {
+      embed = find_open_web_page (window, url);
+      if (embed) {
+        ephy_tab_view_select_page (ephy_window_get_tab_view (window), GTK_WIDGET (embed));
+        gtk_window_present (GTK_WINDOW (window));
+        gtk_widget_grab_focus (GTK_WIDGET (embed));
+        goto next_uri;
+      }
+    }
+  }
 
   if (!data->window)
     data->window = ephy_window_new ();
@@ -1672,7 +1743,6 @@ ephy_shell_open_uris_idle (OpenURIsData *data)
       reusing_empty_tab = TRUE;
   }
 
-  url = data->uris ? data->uris[data->current_uri] : NULL;
   url_is_xpi = url && g_str_has_prefix (url, "file:") && g_str_has_suffix (url, ".xpi");
 
   if (!reusing_empty_tab && !url_is_xpi) {
@@ -1708,6 +1778,7 @@ ephy_shell_open_uris_idle (OpenURIsData *data)
     ephy_title_widget_set_address (title_widget, url);
   }
 
+next_uri:
   data->current_uri++;
   data->previous_embed = embed;
 

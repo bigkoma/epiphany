@@ -29,7 +29,10 @@ def main():
         ".git", ".flatpak-builder", "build-primetab", "repo",
         "primetab.json", "primetab-build.log",
     ]
-    manifest["finish-args"].append("--env=PRIMETAB_PANEL_BROWSER=1")
+    manifest["finish-args"].extend([
+        "--env=PRIMETAB_PANEL_BROWSER=1",
+        "--env=PRIMETAB_SINGLE_WINDOW=1",
+    ])
     print(json.dumps(manifest, indent=4))
 
 

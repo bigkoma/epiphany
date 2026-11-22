@@ -82,6 +82,7 @@ typedef struct {
 } EphyShellStartupContext;
 
 EphyShell               *ephy_shell_get_default             (void);
+EphyWindow              *ephy_shell_get_single_window       (EphyShell *shell);
 
 EphyEmbed               *ephy_shell_new_tab                 (EphyShell        *shell,
                                                              EphyWindow       *parent_window,
