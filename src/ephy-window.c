@@ -161,6 +161,8 @@ struct _EphyWindow {
   EphyTabView *tab_view;
   AdwTabBar *tab_bar;
   AdwBin *tab_bar_home;
+  AdwTabPage *panel_touch_page;
+  guint32 panel_touch_time;
   guint panel_timer;
   gboolean tabs_in_header;
   GtkWidget *action_bar_revealer;
@@ -3848,6 +3850,117 @@ is_browser_default (void)
   return FALSE;
 }
 
+/* The painted toolbar stays at the panel height. Allow finger taps in the
+ * first 14 logical pixels below each visible tab. */
+#define PRIMETAB_TAB_TOUCH_PADDING 14
+#define PRIMETAB_TAB_TOUCH_SLOP 12
+#define PRIMETAB_TAB_TOUCH_TIMEOUT 600
+
+static gboolean
+primetab_tab_touch_enabled (EphyWindow *window)
+{
+  return window->tabs_in_header &&
+         adw_tab_bar_get_tabs_revealed (window->tab_bar) &&
+         !adw_tab_overview_get_open (ADW_TAB_OVERVIEW (window->overview)) &&
+         !adw_application_window_get_visible_dialog (ADW_APPLICATION_WINDOW (window));
+}
+
+static void
+primetab_tab_touch_begin_cb (GtkGestureDrag *gesture,
+                             double          x,
+                             double          y,
+                             EphyWindow      *window)
+{
+  GtkWidget *bar = GTK_WIDGET (window->tab_bar);
+  GtkEventController *controller = GTK_EVENT_CONTROLLER (gesture);
+  GdkEvent *event = gtk_event_controller_get_current_event (controller);
+  GtkWidget *direct = NULL;
+  GtkWidget *target;
+  graphene_point_t point;
+  int height = gtk_widget_get_height (bar);
+  GParamSpec *page_property;
+
+  g_clear_object (&window->panel_touch_page);
+  if (!event || !primetab_tab_touch_enabled (window) || height <= 0 ||
+      (gdk_event_get_event_type (event) != GDK_TOUCH_BEGIN &&
+       gdk_event_get_event_type (event) != GDK_BUTTON_PRESS) ||
+      !gtk_widget_compute_point (GTK_WIDGET (window), bar,
+                                 &GRAPHENE_POINT_INIT (x, y), &point) ||
+      point.y < 0 || point.y >= height + PRIMETAB_TAB_TOUCH_PADDING)
+    return;
+
+  if (point.y < height) {
+    direct = gtk_widget_pick (bar, point.x, point.y, GTK_PICK_DEFAULT);
+    for (GtkWidget *widget = direct; widget && widget != bar; widget = gtk_widget_get_parent (widget)) {
+      if (GTK_IS_BUTTON (widget))
+        return;
+    }
+  }
+
+  target = gtk_widget_pick (bar, point.x, height / 2.0, GTK_PICK_DEFAULT);
+  while (target && target != bar && !g_str_equal (gtk_widget_get_css_name (target), "tab"))
+    target = gtk_widget_get_parent (target);
+  if (!target || target == bar)
+    return;
+
+  /* AdwTab is private. Its page property keeps hit testing tied to the
+   * rendered tab, including pinned and partially scrolled tabs. */
+  page_property = g_object_class_find_property (G_OBJECT_GET_CLASS (target), "page");
+  if (!page_property || page_property->value_type != ADW_TYPE_TAB_PAGE)
+    return;
+
+  g_object_get (target, "page", &window->panel_touch_page, NULL);
+  window->panel_touch_time = gtk_event_controller_get_current_event_time (controller);
+
+  /* Claim the extra area before it can start a gesture on the page. Native
+   * gestures on the tab itself can still win before the finger is lifted. */
+  if (window->panel_touch_page &&
+      (!direct || (direct != target && !gtk_widget_is_ancestor (direct, target))))
+    gtk_gesture_set_state (GTK_GESTURE (gesture), GTK_EVENT_SEQUENCE_CLAIMED);
+}
+
+static void
+primetab_tab_touch_update_cb (GtkGestureDrag *gesture,
+                              double          dx,
+                              double          dy,
+                              EphyWindow      *window)
+{
+  if (dx * dx + dy * dy > PRIMETAB_TAB_TOUCH_SLOP * PRIMETAB_TAB_TOUCH_SLOP)
+    g_clear_object (&window->panel_touch_page);
+}
+
+static void
+primetab_tab_touch_end_cb (GtkGestureDrag *gesture,
+                           double          dx,
+                           double          dy,
+                           EphyWindow      *window)
+{
+  g_autoptr (AdwTabPage) page = g_steal_pointer (&window->panel_touch_page);
+  GtkEventController *controller = GTK_EVENT_CONTROLLER (gesture);
+  GdkEvent *event = gtk_event_controller_get_current_event (controller);
+  AdwTabView *view = adw_tab_bar_get_view (window->tab_bar);
+
+  if (!page || !event || !primetab_tab_touch_enabled (window) ||
+      (gdk_event_get_event_type (event) != GDK_TOUCH_END &&
+       gdk_event_get_event_type (event) != GDK_BUTTON_RELEASE) ||
+      dx * dx + dy * dy > PRIMETAB_TAB_TOUCH_SLOP * PRIMETAB_TAB_TOUCH_SLOP ||
+      gdk_event_get_time (event) - window->panel_touch_time > PRIMETAB_TAB_TOUCH_TIMEOUT ||
+      adw_tab_view_get_selected_page (view) == page ||
+      !gtk_widget_is_ancestor (adw_tab_page_get_child (page), GTK_WIDGET (view)))
+    return;
+
+  gtk_gesture_set_state (GTK_GESTURE (gesture), GTK_EVENT_SEQUENCE_CLAIMED);
+  adw_tab_view_set_selected_page (view, page);
+}
+
+static void
+primetab_tab_touch_cancel_cb (GtkGesture       *gesture,
+                              GdkEventSequence *sequence,
+                              EphyWindow       *window)
+{
+  g_clear_object (&window->panel_touch_page);
+}
+
 static gboolean
 update_primetab_panel (EphyWindow *window)
 {
@@ -3934,6 +4047,7 @@ ephy_window_dispose (GObject *object)
     g_clear_handle_id (&window->panel_timer, g_source_remove);
     g_clear_handle_id (&window->modified_forms_timeout_id, g_source_remove);
 
+    g_clear_object (&window->panel_touch_page);
     g_clear_weak_pointer (&window->previous_embed);
     g_clear_pointer (&window->action_labels, g_hash_table_unref);
     g_clear_pointer (&window->action_groups, g_hash_table_unref);
@@ -4700,8 +4814,18 @@ ephy_window_constructed (GObject *object)
   ephy_tab_view_set_tab_bar (window->tab_view, window->tab_bar);
   ephy_tab_view_set_tab_overview (window->tab_view, ADW_TAB_OVERVIEW (window->overview));
 
-  if (window->tab_bar_home)
+  if (window->tab_bar_home) {
+    GtkGesture *touch = gtk_gesture_drag_new ();
+
+    gtk_gesture_single_set_touch_only (GTK_GESTURE_SINGLE (touch), TRUE);
+    gtk_event_controller_set_propagation_phase (GTK_EVENT_CONTROLLER (touch), GTK_PHASE_CAPTURE);
+    g_signal_connect (touch, "drag-begin", G_CALLBACK (primetab_tab_touch_begin_cb), window);
+    g_signal_connect (touch, "drag-update", G_CALLBACK (primetab_tab_touch_update_cb), window);
+    g_signal_connect (touch, "drag-end", G_CALLBACK (primetab_tab_touch_end_cb), window);
+    g_signal_connect (touch, "cancel", G_CALLBACK (primetab_tab_touch_cancel_cb), window);
+    gtk_widget_add_controller (GTK_WIDGET (window), GTK_EVENT_CONTROLLER (touch));
     window->panel_timer = g_timeout_add (150, (GSourceFunc)update_primetab_panel, window);
+  }
 
   /* other notifiers */
   action = g_action_map_lookup_action (G_ACTION_MAP (shell),
